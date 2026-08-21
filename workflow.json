@@ -1,0 +1,764 @@
+{
+  "name": "CRM Data Quality & Duplicate Prevention",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "crm-bulk-pull",
+        "options": {}
+      },
+      "id": "a1b2c3d4-1111-4a2b-8c3d-4e5f6a7b8c9d",
+      "name": "Webhook: Receive HubSpot Bulk Pull",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -656,
+        -224
+      ],
+      "webhookId": "b2c3d4e5-2222-4b3c-9d4e-5f6a7b8c9d0e"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "contacts",
+        "options": {}
+      },
+      "id": "c3d4e5f6-3333-4c4d-ae5f-6a7b8c9d0e1f",
+      "name": "Split Out Contacts",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        -432,
+        -224
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO crm_raw_snapshot (hubspot_contact_id, first_name, last_name, email, phone, company_name, job_title, industry, city, state, country, lifecycle_stage, lead_status, hubspot_created_date) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::timestamp);",
+        "options": {
+          "queryReplacement": "={{ [$json.hubspot_contact_id, $json.first_name, $json.last_name, $json.email, $json.phone, $json.company_name, $json.job_title, $json.industry, $json.city, $json.state, $json.country, $json.lifecycle_stage, $json.lead_status, $json.hubspot_created_date] }}"
+        }
+      },
+      "id": "d4e5f6a7-4444-4d5e-bf6a-7b8c9d0e1f2a",
+      "name": "Insert Raw Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -208,
+        -224
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO crm_working_copy (hubspot_contact_id, first_name, last_name, email, phone, company_name, job_title, industry, city, state, country, lifecycle_stage, lead_status, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active');",
+        "options": {
+          "queryReplacement": "={{ [$json.hubspot_contact_id, $json.first_name, $json.last_name, $json.email, $json.phone, $json.company_name, $json.job_title, $json.industry, $json.city, $json.state, $json.country, $json.lifecycle_stage, $json.lead_status] }}"
+        }
+      },
+      "id": "e5f6a7b8-5555-4e6f-8c7b-8c9d0e1f2a3b",
+      "name": "Insert Working Copy",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        16,
+        -224
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "10000000-aaaa-4bbb-8ccc-100000000001",
+      "name": "Manual: Run Matching Pass",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -656,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, first_name, last_name, email, phone, company_name FROM crm_working_copy WHERE status = 'active';",
+        "options": {}
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-100000000002",
+      "name": "Get Active Contacts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -432,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const NICKNAME_TO_FORMAL = {\n  bob: 'robert', bill: 'william', liz: 'elizabeth', kathy: 'katherine',\n  mike: 'michael', jen: 'jennifer', jon: 'jonathan', chris: 'christopher',\n  nick: 'nicholas', debbie: 'deborah', maggie: 'margaret', pat: 'patricia',\n  tim: 'timothy', ben: 'benjamin', sam: 'samuel', becky: 'rebecca',\n  steph: 'stephanie', greg: 'gregory', tony: 'anthony', kim: 'kimberly'\n};\n\nfunction canonicalFirstName(first) {\n  const lower = (first || '').trim().toLowerCase();\n  return NICKNAME_TO_FORMAL[lower] || lower;\n}\n\nconst first = $json.first_name || '';\nconst last = $json.last_name || '';\nconst canonicalFirst = canonicalFirstName(first);\nconst normalizedName = `${canonicalFirst} ${last.trim().toLowerCase()}`.trim();\nconst normalizedEmail = ($json.email || '').trim().toLowerCase();\nconst normalizedPhone = ($json.phone || '').replace(/\\D/g, '');\n\nreturn {\n  ...$json,\n  normalized_name: normalizedName,\n  normalized_email: normalizedEmail,\n  normalized_phone: normalizedPhone\n};"
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-100000000003",
+      "name": "Code: Normalize Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE crm_working_copy SET normalized_name = $1, normalized_email = $2, normalized_phone = $3, updated_at = NOW() WHERE id = $4;",
+        "options": {
+          "queryReplacement": "={{ [$json.normalized_name, $json.normalized_email, $json.normalized_phone, $json.id] }}"
+        }
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-100000000004",
+      "name": "Update Normalized Fields",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        16,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, first_name, last_name, email, phone, company_name, normalized_name, normalized_email, normalized_phone FROM crm_working_copy WHERE status = 'active';",
+        "options": {}
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-100000000005",
+      "name": "Get All Normalized Contacts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        320
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "function levenshtein(a, b) {\n  const m = a.length, n = b.length;\n  if (m === 0) return n;\n  if (n === 0) return m;\n  const dp = Array.from({length: m + 1}, () => new Array(n + 1).fill(0));\n  for (let i = 0; i <= m; i++) dp[i][0] = i;\n  for (let j = 0; j <= n; j++) dp[0][j] = j;\n  for (let i = 1; i <= m; i++) {\n    for (let j = 1; j <= n; j++) {\n      const cost = a[i - 1] === b[j - 1] ? 0 : 1;\n      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);\n    }\n  }\n  return dp[m][n];\n}\n\nfunction nameSimilarity(a, b) {\n  if (!a || !b) return 0;\n  const maxLen = Math.max(a.length, b.length);\n  if (maxLen === 0) return 1;\n  return 1 - levenshtein(a, b) / maxLen;\n}\n\nfunction completeness(c) {\n  return ['first_name', 'last_name', 'email', 'phone', 'company_name']\n    .filter(f => c[f] && String(c[f]).trim() !== '').length;\n}\n\nconst contacts = items.map(item => item.json);\n\n// Block by first 3 letters of normalized last name - avoids full N^2 comparison,\n// same pattern that matters at 33K-65K scale even though it's not strictly\n// necessary at this demo's ~1,000 rows.\nconst blocks = {};\nfor (const c of contacts) {\n  const lastName = (c.normalized_name || '').split(' ').slice(1).join(' ');\n  const key = lastName.slice(0, 3) || '___';\n  if (!blocks[key]) blocks[key] = [];\n  blocks[key].push(c);\n}\n\nconst pairs = [];\nconst seen = new Set();\n\nfor (const key in blocks) {\n  const group = blocks[key];\n  for (let i = 0; i < group.length; i++) {\n    for (let j = i + 1; j < group.length; j++) {\n      const a = group[i], b = group[j];\n      const pairKey = [a.id, b.id].sort().join('-');\n      if (seen.has(pairKey)) continue;\n      seen.add(pairKey);\n\n      const phoneMatch = a.normalized_phone && b.normalized_phone && a.normalized_phone === b.normalized_phone;\n      const emailMatch = a.normalized_email && b.normalized_email && a.normalized_email === b.normalized_email;\n      const nameSim = nameSimilarity(a.normalized_name, b.normalized_name);\n      const companyMatch = a.company_name && b.company_name &&\n        a.company_name.trim().toLowerCase() === b.company_name.trim().toLowerCase();\n\n      let confidence = 0;\n      const matchedFields = [];\n\n      if (phoneMatch) {\n        confidence = 0.95;\n        matchedFields.push('phone exact match');\n      } else if (emailMatch) {\n        confidence = 0.95;\n        matchedFields.push('email exact match');\n      } else if (nameSim >= 0.85 && companyMatch) {\n        confidence = 0.80;\n        matchedFields.push('name similarity', 'company match');\n      } else if (nameSim >= 0.85) {\n        confidence = 0.50;\n        matchedFields.push('name similarity only');\n      }\n\n      if (confidence < 0.40) continue;\n\n      const aScore = completeness(a);\n      const bScore = completeness(b);\n      let survivorId, loserId;\n      if (aScore > bScore) { survivorId = a.id; loserId = b.id; }\n      else if (bScore > aScore) { survivorId = b.id; loserId = a.id; }\n      else { survivorId = Math.min(a.id, b.id); loserId = Math.max(a.id, b.id); }\n\n      pairs.push({\n        json: {\n          contact_a_id: a.id,\n          contact_b_id: b.id,\n          survivor_id: survivorId,\n          loser_id: loserId,\n          confidence_score: confidence,\n          matched_fields: matchedFields.join(', ')\n        }\n      });\n    }\n  }\n}\n\nreturn pairs;"
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-100000000006",
+      "name": "Code: Score Candidate Pairs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.confidence_score }}",
+                    "rightValue": 0.85,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gte"
+                    },
+                    "id": "20000000-bbbb-4ccc-9ddd-200000000001"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.confidence_score }}",
+                    "rightValue": 0.85,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    },
+                    "id": "20000000-bbbb-4ccc-9ddd-200000000002"
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-100000000007",
+      "name": "Route: Auto-Merge vs Review",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        688,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE crm_working_copy SET status = 'merged', merged_into_id = $1, updated_at = NOW() WHERE id = $2;",
+        "options": {
+          "queryReplacement": "={{ [$json.survivor_id, $json.loser_id] }}"
+        }
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-100000000008",
+      "name": "Auto-Merge Loser Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        912,
+        176
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO dedup_review_queue (contact_a_id, contact_b_id, confidence_score, matched_fields, survivor_contact_id, loser_contact_id) VALUES ($1, $2, $3, $4, $5, $6);",
+        "options": {
+          "queryReplacement": "={{ [$json.contact_a_id, $json.contact_b_id, $json.confidence_score, $json.matched_fields, $json.survivor_id, $json.loser_id] }}"
+        }
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-100000000009",
+      "name": "Insert Into Review Queue",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        912,
+        464
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "review-queue",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000001",
+      "name": "Webhook: Get Review Queue",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -656,
+        720
+      ],
+      "webhookId": "40000000-dddd-4eee-9fff-400000000001"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT rq.id AS review_id, rq.confidence_score::float8 AS confidence_score, rq.matched_fields, a.id AS a_id, a.first_name AS a_first_name, a.last_name AS a_last_name, a.email AS a_email, a.phone AS a_phone, a.company_name AS a_company_name, a.job_title AS a_job_title, b.id AS b_id, b.first_name AS b_first_name, b.last_name AS b_last_name, b.email AS b_email, b.phone AS b_phone, b.company_name AS b_company_name, b.job_title AS b_job_title FROM dedup_review_queue rq JOIN crm_working_copy a ON a.id = rq.contact_a_id JOIN crm_working_copy b ON b.id = rq.contact_b_id WHERE rq.decision = 'pending' ORDER BY rq.confidence_score DESC;",
+        "options": {}
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000002",
+      "name": "Query: Pending Review Pairs",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -432,
+        720
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000003",
+      "name": "Respond: Review Queue JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        -208,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "review-decision",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000004",
+      "name": "Webhook: Submit Review Decision",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -656,
+        976
+      ],
+      "webhookId": "40000000-dddd-4eee-9fff-400000000002"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.body.decision }}",
+              "rightValue": "approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "id": "50000000-eeee-4fff-8aaa-500000000001"
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000005",
+      "name": "If: Decision Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -432,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT survivor_contact_id, loser_contact_id FROM dedup_review_queue WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.review_id] }}"
+        }
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000006",
+      "name": "Get Survivor/Loser",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -208,
+        880
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE crm_working_copy SET status = 'merged', merged_into_id = $1, updated_at = NOW() WHERE id = $2;",
+        "options": {
+          "queryReplacement": "={{ [$json.survivor_contact_id, $json.loser_contact_id] }}"
+        }
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000007",
+      "name": "Merge Loser Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        16,
+        880
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE dedup_review_queue SET decision = 'approved', reviewed_at = NOW() WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$('Webhook: Submit Review Decision').item.json.body.review_id] }}"
+        }
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000008",
+      "name": "Mark Review Approved",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        880
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE dedup_review_queue SET decision = 'rejected', reviewed_at = NOW() WHERE id = $1;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.review_id] }}"
+        }
+      },
+      "id": "30000000-cccc-4ddd-8eee-300000000009",
+      "name": "Mark Review Rejected",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -208,
+        1072
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true } }}",
+        "options": {}
+      },
+      "id": "30000000-cccc-4ddd-8eee-30000000000a",
+      "name": "Respond: Decision Recorded",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        464,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Review Queue API (for Lovable)\nTwo endpoints the Lovable frontend calls directly:\n\n**GET /review-queue** - returns all pending pairs with both contacts' full details, highest confidence first.\n\n**POST /review-decision** - body `{ review_id, decision: 'approved' | 'rejected' }`. Approved: looks up the survivor/loser already computed during scoring, merges the loser into crm_working_copy, marks the review row approved. Rejected: just marks the review row rejected, no merge happens - the pair stays as two separate active records.\n\nBoth need the same ngrok/tunnel exposure as every other webhook in this project to be reachable from Lovable's hosted frontend, not just locally.",
+        "height": 360,
+        "width": 900,
+        "color": 6
+      },
+      "id": "30000000-cccc-4ddd-8eee-30000000000b",
+      "name": "Note: Review Queue API",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Normalize + Match + Score\nManual trigger for now (run after a bulk pull completes) - reads all active `crm_working_copy` rows, normalizes name/email/phone (with nickname canonicalization: Bob<->Robert, Liz<->Elizabeth, etc.), writes normalization back, then re-pulls the full set for a global blocked comparison.\n\n**Scoring is rule-based, not a blended formula, on purpose:** phone or email exact match -> 0.95 (auto-merge territory). Name similarity + company match -> 0.80. Name similarity alone -> 0.50 (review queue, deliberately not auto-merge or discard - a partial re-entry and a false-positive same-name pair look identical from name alone, so this has to go to a human, not get guessed at).\n\n**Blocking:** grouped by first 3 letters of normalized last name before comparing, instead of a full N^2 scan across all active contacts - the pattern that matters once this runs against 33K-65K rows, not just at this demo's ~1,000.\n\n**Thresholds:** >=0.85 auto-merges (loser marked `status='merged'`, `merged_into_id` set - never deleted, stays in the table for audit). 0.40-0.85 goes to `dedup_review_queue`. Below 0.40 isn't even flagged - the Code node skips it entirely.",
+        "height": 480,
+        "width": 1000,
+        "color": 4
+      },
+      "id": "10000000-aaaa-4bbb-8ccc-10000000000a",
+      "name": "Note: Normalize + Match",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Bulk Pull Ingest\nReceives batches of contacts from the GitHub Actions bulk-pull script (chunks of 50, POSTed as `{ contacts: [...] }`). Writes every contact into BOTH `crm_raw_snapshot` (immutable, never touched again - the rollback reference) and `crm_working_copy` (where normalization/matching/merge decisions will actually happen, in a separate flow built next). Both inserts run in parallel directly off Split Out Contacts, not chained - neither depends on the other's output, and chaining them caused item-index tracking to break across a 50-item batch (only the first item per batch landed in crm_working_copy until this was fixed 2026-08-20).\n\n**Why parameterized queries here, unlike a naive string-interpolated INSERT:** contact names/companies can contain apostrophes (O'Brien, O'Connor) that would break a raw-interpolated query or worse. Using n8n's Query Parameters ($1, $2...) avoids that class of bug entirely, not just for this project - n8n's own Postgres node flags this exact risk in its UI.\n\n**Local testing constraint:** GitHub Actions can't reach localhost, so this webhook needs the same ngrok/Cloudflare Tunnel exposure the other projects' webhooks do. The `N8N_WEBHOOK_URL` GitHub secret needs updating each time the tunnel restarts.",
+        "height": 400,
+        "width": 1000,
+        "color": 5
+      },
+      "id": "f6a7b8c9-6666-4f7a-9d8c-9d0e1f2a3b4c",
+      "name": "Note: Bulk Pull Ingest",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        -448
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook: Get Review Queue": {
+      "main": [
+        [
+          {
+            "node": "Query: Pending Review Pairs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query: Pending Review Pairs": {
+      "main": [
+        [
+          {
+            "node": "Respond: Review Queue JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook: Submit Review Decision": {
+      "main": [
+        [
+          {
+            "node": "If: Decision Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If: Decision Approved?": {
+      "main": [
+        [
+          {
+            "node": "Get Survivor/Loser",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Review Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Survivor/Loser": {
+      "main": [
+        [
+          {
+            "node": "Merge Loser Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Loser Record": {
+      "main": [
+        [
+          {
+            "node": "Mark Review Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Review Approved": {
+      "main": [
+        [
+          {
+            "node": "Respond: Decision Recorded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Review Rejected": {
+      "main": [
+        [
+          {
+            "node": "Respond: Decision Recorded",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual: Run Matching Pass": {
+      "main": [
+        [
+          {
+            "node": "Get Active Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Contacts": {
+      "main": [
+        [
+          {
+            "node": "Code: Normalize Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Normalize Fields": {
+      "main": [
+        [
+          {
+            "node": "Update Normalized Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Normalized Fields": {
+      "main": [
+        [
+          {
+            "node": "Get All Normalized Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Normalized Contacts": {
+      "main": [
+        [
+          {
+            "node": "Code: Score Candidate Pairs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Score Candidate Pairs": {
+      "main": [
+        [
+          {
+            "node": "Route: Auto-Merge vs Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route: Auto-Merge vs Review": {
+      "main": [
+        [
+          {
+            "node": "Auto-Merge Loser Record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert Into Review Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook: Receive HubSpot Bulk Pull": {
+      "main": [
+        [
+          {
+            "node": "Split Out Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out Contacts": {
+      "main": [
+        [
+          {
+            "node": "Insert Raw Snapshot",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert Working Copy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  }
+}
