@@ -1,4 +1,4 @@
-name: Bulk sync CRM contacts (HubSpot -> n8n -> Postgres)
+name: Bulk sync CRM contacts (pull: HubSpot -> n8n -> Postgres · push: Postgres -> HubSpot direct)
 
 # Manual trigger only for this demo - a real client deployment would add
 # a schedule (e.g. nightly) once the pipeline is trusted in production.
@@ -26,7 +26,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests psycopg2-binary
 
       - name: Run bulk pull
         if: ${{ inputs.direction == 'pull' }}
@@ -39,5 +39,5 @@ jobs:
         if: ${{ inputs.direction == 'push' }}
         env:
           HUBSPOT_ACCESS_TOKEN: ${{ secrets.HUBSPOT_ACCESS_TOKEN }}
-          N8N_WEBHOOK_URL: ${{ secrets.N8N_WEBHOOK_URL }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: python scripts/bulk_push_hubspot.py

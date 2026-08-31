@@ -55,9 +55,17 @@ careful to avoid:
 - **Bulk pull (manual dispatch)** is a heavy, infrequent operation — the
   kind of thing you run once to seed the system, or occasionally to
   resync. It's the only piece that talks to the CRM's real API, and it's
-  the only piece that runs outside n8n entirely (GitHub Actions), because
-  a full paginated bulk pull isn't the kind of job n8n's execution model
-  is built for.
+  the only piece that runs outside n8n entirely (GitHub Actions). n8n can
+  paginate fine — this isn't a capability gap. It's about isolating a
+  slow, rate-limited operation from the fast day-to-day flows: at
+  33K-65K-record scale, a full pull is hundreds of throttled API calls
+  that can run for minutes, and tying up an n8n execution slot for that
+  long, on every resync, competes with the matching pass, review-decision
+  webhook, and owner assignment for the same execution capacity (and on
+  n8n Cloud, counts against execution-based billing). GitHub Actions
+  runners are built for exactly this shape of job — long, infrequent,
+  isolated — so the heavy pull lives there, and n8n stays free to handle
+  the real-time pieces without contention.
 - **The matching pass (manual trigger)** is deliberately not automatic yet
   in this build — running it on a schedule before the confidence
   thresholds have been validated against real review decisions would mean

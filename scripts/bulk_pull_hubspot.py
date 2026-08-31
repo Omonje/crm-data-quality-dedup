@@ -9,6 +9,11 @@ Actions runners can't reach a local database anyway, and keeping "only
 n8n talks to the DB" as a hard boundary matches how the rest of this
 portfolio's projects are built.
 
+Every HubSpot and n8n call goes through request_with_retry(), which
+survives a 429 (rate limited) or a transient 5xx by waiting and retrying
+instead of crashing the whole pull - it honors HubSpot's Retry-After
+header when present, exponential backoff otherwise.
+
 Env vars required:
   HUBSPOT_ACCESS_TOKEN  - Private App token, read scope on contacts
   N8N_WEBHOOK_URL        - full webhook URL, e.g. https://<tunnel>/webhook/crm-bulk-pull
@@ -23,12 +28,36 @@ import requests
 HUBSPOT_API_BASE = "https://api.hubapi.com"
 PAGE_SIZE = 100
 CHUNK_SIZE = 50  # contacts per POST to n8n, keeps payloads reasonable
+MAX_RETRIES = 5
 
 PROPERTIES = [
     "firstname", "lastname", "email", "phone", "company", "jobtitle",
     "industry", "city", "state", "country", "lifecyclestage",
     "hs_lead_status", "createdate",
 ]
+
+
+def request_with_retry(method, url, **kwargs):
+    """requests.request wrapper that survives HubSpot rate limits (429) and
+    transient 5xx errors instead of crashing the whole run on one bad call.
+    Respects HubSpot's Retry-After header when present; falls back to
+    exponential backoff (1s, 2s, 4s, 8s, 16s) otherwise."""
+    for attempt in range(MAX_RETRIES):
+        resp = requests.request(method, url, **kwargs)
+
+        if resp.status_code == 429 or resp.status_code >= 500:
+            if attempt == MAX_RETRIES - 1:
+                resp.raise_for_status()
+            wait = float(resp.headers.get("Retry-After", 2 ** attempt))
+            reason = "rate limited" if resp.status_code == 429 else f"server error {resp.status_code}"
+            print(f"{reason}, retrying in {wait}s (attempt {attempt + 1}/{MAX_RETRIES})...")
+            time.sleep(wait)
+            continue
+
+        resp.raise_for_status()
+        return resp
+
+    raise RuntimeError(f"Gave up after {MAX_RETRIES} retries against {url}")
 
 
 def fetch_all_contacts(token):
@@ -44,13 +73,13 @@ def fetch_all_contacts(token):
         if after:
             params["after"] = after
 
-        resp = requests.get(
+        resp = request_with_retry(
+            "GET",
             f"{HUBSPOT_API_BASE}/crm/v3/objects/contacts",
             headers=headers,
             params=params,
             timeout=30,
         )
-        resp.raise_for_status()
         data = resp.json()
 
         for record in data.get("results", []):
@@ -79,9 +108,9 @@ def fetch_all_contacts(token):
         if not after:
             break
 
-        # small pause between pages - polite to the API even though a
-        # 1,000-row demo won't come close to HubSpot's real rate limits;
-        # this is the pattern that matters at 33K-65K scale
+        # paced pause between pages, on top of request_with_retry's 429
+        # handling - keeps normal-case traffic well under the limit instead
+        # of relying on backoff to recover from hitting it every time
         time.sleep(0.2)
 
     return contacts
@@ -90,8 +119,7 @@ def fetch_all_contacts(token):
 def send_to_n8n(contacts, webhook_url):
     for i in range(0, len(contacts), CHUNK_SIZE):
         chunk = contacts[i:i + CHUNK_SIZE]
-        resp = requests.post(webhook_url, json={"contacts": chunk}, timeout=30)
-        resp.raise_for_status()
+        request_with_retry("POST", webhook_url, json={"contacts": chunk}, timeout=30)
         print(f"Sent batch {i // CHUNK_SIZE + 1} ({len(chunk)} contacts) -> n8n")
         time.sleep(0.2)
 
