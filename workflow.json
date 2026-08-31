@@ -534,6 +534,136 @@
     },
     {
       "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "60000000-1111-4222-8333-600000000005",
+      "name": "Schedule: Assign Owners Hourly",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -656,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, state FROM crm_working_copy WHERE status = 'active' AND owner IS NULL;",
+        "options": {}
+      },
+      "id": "60000000-1111-4222-8333-600000000002",
+      "name": "Get Unassigned Active Contacts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -432,
+        1280
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const REGION_BY_STATE = {\n  CT: 'Northeast', ME: 'Northeast', MA: 'Northeast', NH: 'Northeast', RI: 'Northeast', VT: 'Northeast', NJ: 'Northeast', NY: 'Northeast', PA: 'Northeast',\n  IL: 'Midwest', IN: 'Midwest', MI: 'Midwest', OH: 'Midwest', WI: 'Midwest', IA: 'Midwest', KS: 'Midwest', MN: 'Midwest', MO: 'Midwest', NE: 'Midwest', ND: 'Midwest', SD: 'Midwest',\n  DE: 'South', FL: 'South', GA: 'South', MD: 'South', NC: 'South', SC: 'South', VA: 'South', WV: 'South', AL: 'South', KY: 'South', MS: 'South', TN: 'South', AR: 'South', LA: 'South', OK: 'South', TX: 'South',\n  AZ: 'West', CO: 'West', ID: 'West', MT: 'West', NV: 'West', NM: 'West', UT: 'West', WY: 'West', AK: 'West', CA: 'West', HI: 'West', OR: 'West', WA: 'West'\n};\n\nconst REP_BY_REGION = {\n  Northeast: 'Priya Desai',\n  Midwest: 'Marcus Webb',\n  South: 'Alicia Turner',\n  West: 'Daniel Cho'\n};\n\nconst state = ($json.state || '').trim().toUpperCase();\nconst region = REGION_BY_STATE[state];\nconst owner = region ? REP_BY_REGION[region] : 'Unassigned - needs territory review';\n\nreturn {\n  ...$json,\n  owner\n};"
+      },
+      "id": "60000000-1111-4222-8333-600000000003",
+      "name": "Code: Assign Territory",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE crm_working_copy SET owner = $1, updated_at = NOW() WHERE id = $2;",
+        "options": {
+          "queryReplacement": "={{ [$json.owner, $json.id] }}"
+        }
+      },
+      "id": "60000000-1111-4222-8333-600000000004",
+      "name": "Update Owner",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        16,
+        1280
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "l2zqhbMSxdWAjdLz",
+          "name": "Local App DB Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const high = items.filter(i => i.json.confidence_score >= 0.70).length;\nconst low = items.length - high;\n\nreturn [{\n  json: {\n    count: items.length,\n    high_confidence_count: high,\n    low_confidence_count: low\n  }\n}];"
+      },
+      "id": "70000000-2222-4333-8444-700000000001",
+      "name": "Code: Count Review Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        912,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": "#automation-alerts",
+        "text": "=CRM Data Quality: {{ $json.count }} new duplicate pairs need review.\\n{{ $json.high_confidence_count }} likely matches (>=70% confidence), {{ $json.low_confidence_count }} weaker matches worth a closer look.\\nReview at the Lovable dashboard.",
+        "otherOptions": {}
+      },
+      "id": "70000000-2222-4333-8444-700000000002",
+      "name": "Slack: New Review Items",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1136,
+        640
+      ],
+      "credentials": {
+        "slackApi": {
+          "id": "ZsoOBs2yYMN77zm8",
+          "name": "Danlex Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## Owner Assignment\nRuns on its own hourly Schedule Trigger, independent of the matching pass. n8n only allows one Manual Trigger per workflow, so this can't share the matching pass's trigger - a Schedule Trigger has no such limit, and running independently is actually more correct anyway: assignment isn't coupled to whether a merge happened this hour, it just checks for anything currently `status='active'` and unowned. Territory-based on the `state` field using US Census regions, 4 demo reps, one per region. States that don't map to a known region get flagged 'Unassigned - needs territory review' instead of a wrong guess - same reasoning as the dedup review queue, don't silently assign something you're not sure about.",
+        "height": 260,
+        "width": 800,
+        "color": 6
+      },
+      "id": "60000000-1111-4222-8333-60000000000a",
+      "name": "Note: Owner Assignment",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -704,
+        1136
+      ]
+    },
+    {
+      "parameters": {
         "content": "## Bulk Pull Ingest\nReceives batches of contacts from the GitHub Actions bulk-pull script (chunks of 50, POSTed as `{ contacts: [...] }`). Writes every contact into BOTH `crm_raw_snapshot` (immutable, never touched again - the rollback reference) and `crm_working_copy` (where normalization/matching/merge decisions will actually happen, in a separate flow built next). Both inserts run in parallel directly off Split Out Contacts, not chained - neither depends on the other's output, and chaining them caused item-index tracking to break across a 50-item batch (only the first item per batch landed in crm_working_copy until this was fixed 2026-08-20).\n\n**Why parameterized queries here, unlike a naive string-interpolated INSERT:** contact names/companies can contain apostrophes (O'Brien, O'Connor) that would break a raw-interpolated query or worse. Using n8n's Query Parameters ($1, $2...) avoids that class of bug entirely, not just for this project - n8n's own Postgres node flags this exact risk in its UI.\n\n**Local testing constraint:** GitHub Actions can't reach localhost, so this webhook needs the same ngrok/Cloudflare Tunnel exposure the other projects' webhooks do. The `N8N_WEBHOOK_URL` GitHub secret needs updating each time the tunnel restarts.",
         "height": 400,
         "width": 1000,
@@ -645,6 +775,39 @@
         ]
       ]
     },
+    "Schedule: Assign Owners Hourly": {
+      "main": [
+        [
+          {
+            "node": "Get Unassigned Active Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Unassigned Active Contacts": {
+      "main": [
+        [
+          {
+            "node": "Code: Assign Territory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Assign Territory": {
+      "main": [
+        [
+          {
+            "node": "Update Owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
     "Manual: Run Matching Pass": {
       "main": [
         [
@@ -723,6 +886,22 @@
         [
           {
             "node": "Insert Into Review Queue",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Code: Count Review Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Count Review Items": {
+      "main": [
+        [
+          {
+            "node": "Slack: New Review Items",
             "type": "main",
             "index": 0
           }
