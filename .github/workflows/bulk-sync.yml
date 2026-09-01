@@ -1,4 +1,4 @@
-name: Bulk sync CRM contacts (pull: HubSpot -> n8n -> Postgres · push: Postgres -> HubSpot direct)
+name: Bulk sync CRM contacts (pull HubSpot to n8n to Postgres, push Postgres to HubSpot direct)
 
 # Manual trigger only for this demo - a real client deployment would add
 # a schedule (e.g. nightly) once the pipeline is trusted in production.
