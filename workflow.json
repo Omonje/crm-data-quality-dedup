@@ -57,9 +57,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO crm_working_copy (hubspot_contact_id, first_name, last_name, email, phone, company_name, job_title, industry, city, state, country, lifecycle_stage, lead_status, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'active');",
+        "query": "INSERT INTO crm_working_copy (hubspot_contact_id, first_name, last_name, email, phone, company_name, job_title, industry, city, state, country, lifecycle_stage, lead_status, hubspot_owner_id, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, 'active');",
         "options": {
-          "queryReplacement": "={{ [$json.hubspot_contact_id, $json.first_name, $json.last_name, $json.email, $json.phone, $json.company_name, $json.job_title, $json.industry, $json.city, $json.state, $json.country, $json.lifecycle_stage, $json.lead_status] }}"
+          "queryReplacement": "={{ [$json.hubspot_contact_id, $json.first_name, $json.last_name, $json.email, $json.phone, $json.company_name, $json.job_title, $json.industry, $json.city, $json.state, $json.country, $json.lifecycle_stage, $json.lead_status, $json.hubspot_owner_id] }}"
         }
       },
       "id": "e5f6a7b8-5555-4e6f-8c7b-8c9d0e1f2a3b",
@@ -555,7 +555,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, state FROM crm_working_copy WHERE status = 'active' AND owner IS NULL;",
+        "query": "SELECT id, state FROM crm_working_copy WHERE status = 'active' AND owner IS NULL AND hubspot_owner_id IS NULL;",
         "options": {}
       },
       "id": "60000000-1111-4222-8333-600000000002",

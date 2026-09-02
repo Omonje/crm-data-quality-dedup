@@ -33,7 +33,7 @@ MAX_RETRIES = 5
 PROPERTIES = [
     "firstname", "lastname", "email", "phone", "company", "jobtitle",
     "industry", "city", "state", "country", "lifecyclestage",
-    "hs_lead_status", "createdate",
+    "hs_lead_status", "createdate", "hubspot_owner_id",
 ]
 
 
@@ -99,6 +99,7 @@ def fetch_all_contacts(token):
                 "lifecycle_stage": props.get("lifecyclestage"),
                 "lead_status": props.get("hs_lead_status"),
                 "hubspot_created_date": props.get("createdate"),
+                "hubspot_owner_id": props.get("hubspot_owner_id"),
             })
 
         paging = data.get("paging", {})

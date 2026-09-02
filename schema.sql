@@ -47,7 +47,8 @@ CREATE TABLE crm_working_copy (
     -- merge/lifecycle tracking
     status VARCHAR(20) DEFAULT 'active', -- active | merged | pending_review
     merged_into_id INT REFERENCES crm_working_copy(id),
-    owner VARCHAR(100),
+    hubspot_owner_id VARCHAR(50), -- owner already set in HubSpot at pull time, if any - never overwritten
+    owner VARCHAR(100), -- rep name assigned by this system's territory logic, only for contacts with no hubspot_owner_id
     pushed_back_at TIMESTAMP, -- set once the merge result is written back to HubSpot
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
