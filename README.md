@@ -2,6 +2,28 @@
 
 **Docs:** [Architecture](ARCHITECTURE.md) · [Business Case](BUSINESS-CASE.md) · [Deployment Notes](DEPLOYMENT.md)
 
+
+**Video walkthrough:** [Watch the walkthrough on YouTube](https://youtu.be/TZ67zcXZMQY)
+
+## Screenshots
+
+All records shown are test data.
+
+![The n8n dedup workflow with its execution history.](docs/images/dedup-workflow.png)
+*The n8n dedup workflow with its execution history.*
+
+![Human review queue: each ambiguous pair is shown side by side with its match score, and a reviewer approves the merge or rejects it.](docs/images/review-queue-dashboard.png)
+*Human review queue: each ambiguous pair is shown side by side with its match score, and a reviewer approves the merge or rejects it.*
+
+![The dedup_review_queue table in Postgres: candidate pairs with confidence score, matched fields and decision status.](docs/images/pending-review-queue-query.png)
+*The dedup_review_queue table in Postgres: candidate pairs with confidence score, matched fields and decision status.*
+
+![HubSpot contacts list holding the synthetic dirty dataset used in the demo.](docs/images/hubspot-contacts.png)
+*HubSpot contacts list holding the synthetic dirty dataset used in the demo.*
+
+![GitHub Action run for the bulk sync between HubSpot and Postgres.](docs/images/github-action-bulk-sync.png)
+*GitHub Action run for the bulk sync between HubSpot and Postgres.*
+
 ## What this is
 
 A production-pattern deduplication and data-quality system, not a demo
